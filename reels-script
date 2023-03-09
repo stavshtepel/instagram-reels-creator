@@ -1,0 +1,57 @@
+#!/bin/sh
+
+set -euo pipefail
+
+videoCategory=$(printf "view\nbackground\nluxury\nnature\ntravel\nsuccess\nbusiness\nmixed" | dmenu -p "Enter here the category of the images you want:")
+[ -z $videoCategory ] && exit 0
+numOfReels=$(printf "\n" | dmenu -p "Enter here the number of posts you want to get: ")
+[ -z $numOfReels ] && exit 0
+caption=$(printf "\n" | dmenu -p "Enter here the caption you want to add to the text: ")
+chosenLanguage=$(printf "english\nhebrew" | dmenu -p "Choose the language you want your posts' text to have: ")
+[ -z $chosenLanguage ] && exit 0
+customLogo=$(printf "\n" | dmenu -p "Add here the custom logo you want to have in your posts: ") && notify-send "Your posts are in preperation..."
+if [ $chosenLanguage == "hebrew" ]; then
+	chosenFont="fontfile=/home/stav/.fonts/open-sans/opensanshebrew-bold-webfont.ttf"
+else
+	chosenFont="Adderley-bold"
+fi
+textDistance=115
+
+someNum=$(($(ls ~/Videos/instagram-reels | wc -l)+1))
+[ ! -d ~/Videos/instagram-reels/made-reels ] && mkdir ~/Videos/instagram-reels/made-reels
+image-downloader-2 -c $videoCategory -n $numOfReels -d ~/Videos/instagram-reels/made-reels -m video
+
+# sed -n -e '/^$/d' -e '/[^[:upper:] ]/p' -e quotes4.txt
+num=1
+# someNum=$(($(ls --color=none ~/Videos/instagram-reels | sort -nr | head -n 1)))
+# randomTextA=$(cat ~/scripts/posts-script-stuff/quotes1.txt ~/scripts/posts-script-stuff/quotes2.txt ~/scripts/posts-script-stuff/quotes3.txt | sed -e '/^$/d' -e '/^.\{150\}./d' | shuf)
+videoNum=1
+reelNum=1
+textNum=1
+reelWriter() {
+	[ ! -d ~/Videos/instagram-reels/$someNum ] && mkdir ~/Videos/instagram-reels/$someNum
+	[ ! -d ~/Videos/instagram-reels/some-things/ ] && mkdir ~/Videos/instagram-reels/some-things
+ 	[ $chosenLanguage == "english" ] && randomText=$(cat ~/scripts/posts-script-stuff/quotes1.txt ~/scripts/posts-script-stuff/quotes2.txt ~/scripts/posts-script-stuff/quotes3.txt | sed -e '/^$/d' -e '/^.\{150\}./d' | shuf -n 1 | sed 's/\(\(\w\w*\W*\)\{4\}\)/\1\n/g' )
+	[ $chosenLanguage == "hebrew" ] && randomText=$(cat ~/scripts/posts-script-stuff/quotes-hebrew-2.txt | sed -e '/^$/d' -e '/^.\{100\}./d' | shuf -n 1 | sed 's/"//3' | sed 's/\(\(\w\w*\W*\)\{4\}\)/\1\n/g')
+	randomVideos=$(ls ~/Videos/instagram-reels/made-reels | shuf | head -n $videoNum | tail -1)
+	videoYDimensions=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=s=x:p=0 ~/Videos/instagram-reels/made-reels/$randomVideos | cut -d 'x' -f2)
+	videoXDimensions=$((videoYDimensions*9/16))
+	magick -size "$videoXDimensions"x"$videoYDimensions" -background none \
+	\( -gravity center -pointsize 67 \
+	-fill white -font /home/stav/.fonts/open-sans/opensanshebrew-bold-webfont.ttf -interline-spacing -18 -strokewidth 1 -stroke black caption:"$randomText" \) \
+	~/Videos/instagram-reels/some-things/$textNum.png
+	ffmpeg -y -i ~/Videos/instagram-reels/made-reels/$randomVideos -ss 00:00:00 -t 00:00:05 -filter:v "crop=$videoXDimensions:$videoYDimensions:$videoXDimensions:$videoYDimensions" ~/Videos/instagram-reels/some-things/made-$num.mp4
+	ffmpeg -y -i ~/Videos/instagram-reels/some-things/made-$num.mp4 -i ~/Videos/instagram-reels/some-things/$textNum.png -filter_complex "overlay=(W-w)/2:(H-h)/2" -pix_fmt yuv420p -map 0:v -shortest ~/Videos/instagram-reels/$someNum/$num.mp4
+	# ffmpeg -i ~/Videos/instagram-reels/made-reels/$randomVideos -i ~/Videos/instagram-reels/some-things/$textNum.png -filter_complex "[0:v][1:v] overlay=W-w:H-h:enable='between(t,0,20)'" -c:a copy ~/Videos/instagram-reels/$someNum/$num.mp4
+videoNum=$(($videoNum+1))
+reelNum=$(($reelNum+1))
+textNum=$(($textNum+1))
+num=$(($num+1))
+}
+# read w h < <(identify -format "%w %h" "$randomImages")
+# (($textNum=$textNum+1))
+for (( i=1; i<=$(($numOfReels)); i++ )); do
+	reelWriter
+done
+# rm -rf ~/Videos/instagram-reels/made-reels
+# rm -rf ~/Videos/instagram-reels/some-things
